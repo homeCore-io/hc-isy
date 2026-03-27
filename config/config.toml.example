@@ -1,0 +1,48 @@
+# hc-isy plugin configuration
+# Copy to config/config.toml and fill in your values.
+#
+# Prerequisites:
+#   - ISY994i, eisy, or Polisy controller on your local network
+#   - Admin credentials (username/password used for the ISY Admin Console)
+#   - Firmware 4.2.3+ for WebSocket push (virtually all modern ISY units)
+#
+# Supported device types auto-detected from each node's UOM and type code:
+#   light         — Insteon dimmable switches/keypads (UOM 51, category 1)
+#   switch        — Insteon relays, outlet modules (UOM 78, category 2)
+#   binary_sensor — Door/window, motion, moisture sensors
+#   sensor        — Temperature, humidity, power, voltage, …
+#   lock          — Deadbolt locks (UOM 11)
+#   cover         — Garage doors, shades, motors (UOM 97, category 14)
+#   fan           — Insteon FanLinc (category 1.46)
+#   thermostat    — Insteon thermostats (category 5)
+#   scene         — ISY scenes / Insteon node groups
+
+# ---------------------------------------------------------------------------
+# HomeCore broker connection
+# ---------------------------------------------------------------------------
+[homecore]
+broker_host = "127.0.0.1"
+broker_port = 1883
+plugin_id   = "plugin.isy"
+# Must match the entry in homecore's [[mqtt.clients]] section when auth is on.
+# Leave empty if the broker has no auth configured.
+password = ""
+
+# ---------------------------------------------------------------------------
+# ISY/IoX controller connection
+# ---------------------------------------------------------------------------
+[isy]
+# IP address or hostname of your ISY/IoX controller.
+host = "192.168.1.50"
+
+# HTTP port — 80 for plain HTTP (default), 443 for TLS.
+port = 80
+
+# ISY administrator credentials.  These are the same credentials used
+# in the ISY Admin Console (Java Web Start application).
+username = "admin"
+password = "admin"
+
+# Set to true to use HTTPS/WSS.  The ISY typically uses a self-signed
+# certificate; certificate verification is skipped automatically.
+tls = false
