@@ -3,6 +3,8 @@
 use anyhow::Result;
 use serde::Deserialize;
 
+use crate::logging::LoggingConfig;
+
 // ---------------------------------------------------------------------------
 // Top-level config
 // ---------------------------------------------------------------------------
@@ -11,6 +13,8 @@ use serde::Deserialize;
 pub struct Config {
     pub homecore: HomecoreConfig,
     pub isy: IsyConfig,
+    #[serde(default)]
+    pub logging: LoggingConfig,
 }
 
 impl Config {
