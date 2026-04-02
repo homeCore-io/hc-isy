@@ -31,6 +31,8 @@ use crate::config::Config;
 use crate::device::{classify_node, cmd_to_isy, event_to_patch, node_to_state, DeviceKind};
 use crate::isy::{addr_to_device_id, parse_event_xml, IsyClient};
 
+const PLUGIN_SOURCE: &str = "hc-isy";
+
 // ---------------------------------------------------------------------------
 // Device registry (shared read-only after startup)
 // ---------------------------------------------------------------------------
@@ -266,23 +268,53 @@ impl Bridge {
 // ---------------------------------------------------------------------------
 
 async fn publish_state(client: &AsyncClient, device_id: &str, state: &Value) -> Result<()> {
+    let payload = with_default_change(state);
     client
         .publish(
             format!("homecore/devices/{device_id}/state"),
             QoS::AtLeastOnce, true,
-            serde_json::to_vec(state)?,
+            serde_json::to_vec(&payload)?,
         )
         .await.context("publish state")
 }
 
 async fn publish_partial(client: &AsyncClient, device_id: &str, patch: &Value) -> Result<()> {
+    let payload = with_default_change(patch);
     client
         .publish(
             format!("homecore/devices/{device_id}/state/partial"),
             QoS::AtLeastOnce, false,
-            serde_json::to_vec(patch)?,
+            serde_json::to_vec(&payload)?,
         )
         .await.context("publish partial")
+}
+
+fn with_default_change(payload: &Value) -> Value {
+    if payload
+        .get("_hc")
+        .and_then(|v| v.get("change"))
+        .is_some()
+    {
+        return payload.clone();
+    }
+
+    let mut payload = match payload.clone() {
+        Value::Object(map) => map,
+        other => return other,
+    };
+    let mut hc = payload
+        .remove("_hc")
+        .and_then(|v| v.as_object().cloned())
+        .unwrap_or_default();
+    hc.insert(
+        "change".to_string(),
+        serde_json::json!({
+            "kind": "external",
+            "source": PLUGIN_SOURCE,
+        }),
+    );
+    payload.insert("_hc".to_string(), Value::Object(hc));
+    Value::Object(payload)
 }
 
 async fn publish_avail(client: &AsyncClient, device_id: &str, online: bool) -> Result<()> {
