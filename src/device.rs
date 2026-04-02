@@ -16,6 +16,9 @@ use crate::isy::{IsyEvent, IsyNode};
 pub enum DeviceKind {
     Light,
     Switch,
+    ContactSensor,
+    MotionSensor,
+    WaterSensor,
     BinarySensor,
     Sensor,
     Lock,
@@ -28,15 +31,18 @@ pub enum DeviceKind {
 impl DeviceKind {
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Light        => "light",
-            Self::Switch       => "switch",
-            Self::BinarySensor => "binary_sensor",
-            Self::Sensor       => "sensor",
-            Self::Lock         => "lock",
-            Self::Cover        => "cover",
-            Self::Fan          => "fan",
-            Self::Thermostat   => "thermostat",
-            Self::Scene        => "scene",
+            Self::Light         => "light",
+            Self::Switch        => "switch",
+            Self::ContactSensor => "contact_sensor",
+            Self::MotionSensor  => "motion_sensor",
+            Self::WaterSensor   => "water_sensor",
+            Self::BinarySensor  => "binary_sensor",
+            Self::Sensor        => "sensor",
+            Self::Lock          => "lock",
+            Self::Cover         => "cover",
+            Self::Fan           => "fan",
+            Self::Thermostat    => "thermostat",
+            Self::Scene         => "scene",
         }
     }
 }
@@ -80,7 +86,7 @@ pub fn classify_node(node: &IsyNode) -> DeviceKind {
         // UOM 78 = on/off binary
         "78" => {
             if t.starts_with("7.") || t.starts_with("16.") {
-                DeviceKind::BinarySensor
+                classify_binary_sensor(node)
             } else if t.starts_with("2.") || t.starts_with("113.") {
                 DeviceKind::Switch
             } else if t.starts_with("1.") {
@@ -92,7 +98,7 @@ pub fn classify_node(node: &IsyNode) -> DeviceKind {
         }
 
         // UOM 2 = binary (0/1); UOM 25 = index — typically binary sensors
-        "2" | "25" => DeviceKind::BinarySensor,
+        "2" | "25" => classify_binary_sensor(node),
 
         // UOM 11 = deadbolt/lock
         "11" => DeviceKind::Lock,
@@ -111,6 +117,15 @@ pub fn classify_node(node: &IsyNode) -> DeviceKind {
                 DeviceKind::Switch
             }
         }
+    }
+}
+
+fn classify_binary_sensor(node: &IsyNode) -> DeviceKind {
+    match binary_sensor_device_class(node.node_type.as_str()) {
+        Some("motion") => DeviceKind::MotionSensor,
+        Some("moisture") => DeviceKind::WaterSensor,
+        Some("opening") => DeviceKind::ContactSensor,
+        _ => DeviceKind::BinarySensor,
     }
 }
 
@@ -208,6 +223,30 @@ pub fn node_to_state(node: &IsyNode, kind: &DeviceKind) -> Value {
 
         DeviceKind::Switch => {
             json!({ "on": st_value > 0 })
+        }
+
+        DeviceKind::ContactSensor => {
+            let open = st_value > 0;
+            json!({
+                "open": open,
+                "contact": open,
+            })
+        }
+
+        DeviceKind::MotionSensor => {
+            let motion = st_value > 0;
+            json!({
+                "motion": motion,
+                "occupancy": motion,
+            })
+        }
+
+        DeviceKind::WaterSensor => {
+            let leak = st_value <= 0;
+            json!({
+                "leak": leak,
+                "water_detected": leak,
+            })
         }
 
         DeviceKind::BinarySensor => {
@@ -314,6 +353,39 @@ pub fn event_to_patch(event: &IsyEvent, kind: &DeviceKind) -> Option<Value> {
         | (DeviceKind::Switch, "DFON") => Some(json!({ "on": v > 0 })),
         (DeviceKind::Switch, "DOF") | (DeviceKind::Switch, "DFOF") => {
             Some(json!({ "on": false }))
+        }
+
+        // ── Contact Sensor ────────────────────────────────────────────────
+        (DeviceKind::ContactSensor, "ST")
+        | (DeviceKind::ContactSensor, "DON")
+        | (DeviceKind::ContactSensor, "DOF") => {
+            let open = v > 0;
+            Some(json!({
+                "open": open,
+                "contact": open,
+            }))
+        }
+
+        // ── Motion Sensor ─────────────────────────────────────────────────
+        (DeviceKind::MotionSensor, "ST")
+        | (DeviceKind::MotionSensor, "DON")
+        | (DeviceKind::MotionSensor, "DOF") => {
+            let motion = v > 0;
+            Some(json!({
+                "motion": motion,
+                "occupancy": motion,
+            }))
+        }
+
+        // ── Water Sensor ──────────────────────────────────────────────────
+        (DeviceKind::WaterSensor, "ST")
+        | (DeviceKind::WaterSensor, "DON")
+        | (DeviceKind::WaterSensor, "DOF") => {
+            let leak = v <= 0;
+            Some(json!({
+                "leak": leak,
+                "water_detected": leak,
+            }))
         }
 
         // ── Binary Sensor ──────────────────────────────────────────────────
@@ -473,7 +545,11 @@ pub fn cmd_to_isy(payload: &Value, kind: &DeviceKind) -> Vec<IsyCmd> {
         }
 
         // Read-only device types — ignore commands
-        DeviceKind::BinarySensor | DeviceKind::Sensor => vec![],
+        DeviceKind::ContactSensor
+        | DeviceKind::MotionSensor
+        | DeviceKind::WaterSensor
+        | DeviceKind::BinarySensor
+        | DeviceKind::Sensor => vec![],
     }
 }
 
@@ -492,4 +568,74 @@ fn fan_speed_from_value(value: i64) -> (bool, &'static str) {
 
 fn hvac_mode_str(value: i64) -> &'static str {
     match value { 1 => "heat", 2 => "cool", 3 => "auto", _ => "off" }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::isy::{IsyEvent, IsyNode, IsyProperty};
+    use std::collections::HashMap;
+
+    fn binary_node(node_type: &str, value: i64) -> IsyNode {
+        let mut properties = HashMap::new();
+        properties.insert(
+            "ST".to_string(),
+            IsyProperty {
+                value,
+                formatted: value.to_string(),
+                uom: "78".to_string(),
+                prec: 0,
+            },
+        );
+
+        IsyNode {
+            address: "1".to_string(),
+            name: "Test".to_string(),
+            node_type: node_type.to_string(),
+            is_group: false,
+            enabled: true,
+            properties,
+        }
+    }
+
+    #[test]
+    fn classifies_opening_sensor_as_contact_sensor() {
+        let node = binary_node("16.9.1.0", 255);
+        assert_eq!(classify_node(&node), DeviceKind::ContactSensor);
+    }
+
+    #[test]
+    fn classifies_motion_sensor_as_motion_sensor() {
+        let node = binary_node("16.1.1.0", 255);
+        assert_eq!(classify_node(&node), DeviceKind::MotionSensor);
+    }
+
+    #[test]
+    fn classifies_moisture_sensor_as_water_sensor() {
+        let node = binary_node("16.8.1.0", 255);
+        assert_eq!(classify_node(&node), DeviceKind::WaterSensor);
+    }
+
+    #[test]
+    fn water_sensor_state_inverts_dry_signal() {
+        let node = binary_node("16.8.1.0", 255);
+        let state = node_to_state(&node, &DeviceKind::WaterSensor);
+        assert_eq!(state["leak"], json!(false));
+        assert_eq!(state["water_detected"], json!(false));
+    }
+
+    #[test]
+    fn water_sensor_event_patch_inverts_active_signal() {
+        let event = IsyEvent {
+            control: "ST".to_string(),
+            node_addr: "1".to_string(),
+            value: 0,
+            uom: "78".to_string(),
+            prec: 0,
+        };
+
+        let patch = event_to_patch(&event, &DeviceKind::WaterSensor).expect("patch");
+        assert_eq!(patch["leak"], json!(true));
+        assert_eq!(patch["water_detected"], json!(true));
+    }
 }

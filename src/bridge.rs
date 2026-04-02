@@ -12,6 +12,7 @@
 //! 6. Reconnect on any error with exponential back-off
 
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -58,6 +59,7 @@ impl Registry {
 
 pub struct Bridge {
     pub config: Config,
+    pub published_ids_cache_path: PathBuf,
 }
 
 impl Bridge {
@@ -134,6 +136,23 @@ impl Bridge {
 
         // ── Register devices and build registry ───────────────────────────
         let plugin_id = &cfg.homecore.plugin_id;
+        let current_ids: Vec<String> = nodes
+            .iter()
+            .filter(|node| node.enabled)
+            .map(|node| node.device_id())
+            .collect();
+
+        for stale_id in load_published_ids(&self.published_ids_cache_path)
+            .into_iter()
+            .filter(|device_id| !current_ids.iter().any(|current| current == device_id))
+        {
+            if let Err(e) = unregister_device(&mqtt, plugin_id, &stale_id).await {
+                warn!(device_id = %stale_id, error = %e, "Failed to unregister stale ISY device");
+            } else {
+                info!(device_id = %stale_id, "Unregistered stale ISY device");
+            }
+        }
+
         let mut kinds: HashMap<String, DeviceKind> = HashMap::new();
         let mut addrs: HashMap<String, String>     = HashMap::new();
 
@@ -155,6 +174,7 @@ impl Bridge {
             kinds.insert(device_id, kind);
         }
         info!(registered = kinds.len(), "All ISY devices registered with HomeCore");
+        save_published_ids(&self.published_ids_cache_path, &current_ids)?;
 
         let registry = Arc::new(Registry { kinds, addrs });
 
@@ -275,6 +295,33 @@ async fn publish_avail(client: &AsyncClient, device_id: &str, online: bool) -> R
         .await.context("publish availability")
 }
 
+async fn clear_retained_topic(client: &AsyncClient, topic: String) -> Result<()> {
+    client
+        .publish(topic, QoS::AtLeastOnce, true, Vec::<u8>::new())
+        .await
+        .context("clear retained topic")
+}
+
+async fn unregister_device(client: &AsyncClient, plugin_id: &str, device_id: &str) -> Result<()> {
+    clear_retained_topic(client, format!("homecore/devices/{device_id}/state")).await?;
+    clear_retained_topic(client, format!("homecore/devices/{device_id}/availability")).await?;
+    clear_retained_topic(client, format!("homecore/devices/{device_id}/schema")).await?;
+
+    let payload = serde_json::json!({
+        "device_id": device_id,
+        "plugin_id": plugin_id,
+    });
+    client
+        .publish(
+            format!("homecore/plugins/{plugin_id}/unregister"),
+            QoS::AtLeastOnce,
+            false,
+            serde_json::to_vec(&payload)?,
+        )
+        .await
+        .context("unregister device")
+}
+
 async fn register_device(
     client: &AsyncClient, plugin_id: &str,
     device_id: &str, name: &str, kind: &DeviceKind,
@@ -292,6 +339,19 @@ async fn register_device(
             serde_json::to_vec(&payload)?,
         )
         .await.context("register device")
+}
+
+fn load_published_ids(path: &Path) -> Vec<String> {
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|text| serde_json::from_str::<Vec<String>>(&text).ok())
+        .unwrap_or_default()
+}
+
+fn save_published_ids(path: &Path, device_ids: &[String]) -> Result<()> {
+    let payload = serde_json::to_vec_pretty(device_ids)?;
+    std::fs::write(path, payload)?;
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------

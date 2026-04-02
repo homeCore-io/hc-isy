@@ -10,7 +10,10 @@
 //! |---|---|
 //! | Insteon dimmer (UOM 51, cat 1) | `light` |
 //! | Insteon relay / Z-Wave switch (UOM 78) | `switch` |
-//! | Door/window, motion, moisture sensors | `binary_sensor` |
+//! | Door/window sensors | `contact_sensor` |
+//! | Motion sensors | `motion_sensor` |
+//! | Moisture / leak sensors | `water_sensor` |
+//! | Unknown binary sensors | `binary_sensor` |
 //! | Temperature, humidity, power, … | `sensor` |
 //! | Deadbolt / Z-Wave lock (UOM 11) | `lock` |
 //! | Garage door / shade / motor (UOM 97, cat 14) | `cover` |
@@ -32,6 +35,7 @@ mod logging;
 
 use bridge::Bridge;
 use config::Config;
+use std::path::{Path, PathBuf};
 use tracing::error;
 
 #[tokio::main]
@@ -61,7 +65,13 @@ async fn main() {
         "hc-isy starting",
     );
 
-    if let Err(e) = (Bridge { config: cfg }).run().await {
+    if let Err(e) = (Bridge {
+        config: cfg,
+        published_ids_cache_path: published_ids_cache_path(&config_path),
+    })
+    .run()
+    .await
+    {
         error!(error = %e, "Bridge exited with error");
         std::process::exit(1);
     }
@@ -82,4 +92,11 @@ fn init_logging(config_path: &str) -> tracing_appender::non_blocking::WorkerGuar
         .and_then(|s| toml::from_str(&s).ok())
         .unwrap_or_default();
     logging::init_logging(config_path, "hc-isy", "hc_isy=info", &bootstrap.logging)
+}
+
+fn published_ids_cache_path(config_path: &str) -> PathBuf {
+    Path::new(config_path)
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join(".published-device-ids.json")
 }

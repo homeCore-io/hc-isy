@@ -9,7 +9,8 @@
 # Supported device types auto-detected from each node's UOM and type code:
 #   light         — Insteon dimmable switches/keypads (UOM 51, category 1)
 #   switch        — Insteon relays, outlet modules (UOM 78, category 2)
-#   binary_sensor — Door/window, motion, moisture sensors
+#   contact_sensor / motion_sensor / water_sensor — known binary sensor classes
+#   binary_sensor — unknown binary sensors that cannot be classified precisely
 #   sensor        — Temperature, humidity, power, voltage, …
 #   lock          — Deadbolt locks (UOM 11)
 #   cover         — Garage doors, shades, motors (UOM 97, category 14)
