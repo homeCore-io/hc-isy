@@ -69,3 +69,6 @@ max_size_mb = 100
 # Gzip-compress rotated files in a background thread.
 # Active log file is never compressed; only rotated files are compressed.
 compress = true
+
+# Delete rotated log files older than this many days.  0 = never prune.
+prune_after_days = 5
