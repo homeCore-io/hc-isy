@@ -72,3 +72,4 @@ compress = true
 
 # Delete rotated log files older than this many days.  0 = never prune.
 prune_after_days = 5
+log_forward_level = "info" # min level forwarded to core over MQTT

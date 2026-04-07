@@ -7,10 +7,12 @@ use serde::Deserialize;
 // Top-level config
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Config {
     pub homecore: HomecoreConfig,
     pub isy: IsyConfig,
+    #[serde(default)]
+    pub logging: crate::logging::LoggingConfig,
 }
 
 impl Config {
@@ -26,7 +28,7 @@ impl Config {
 // [homecore] — MQTT broker connection and plugin identity
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct HomecoreConfig {
     #[serde(default = "default_broker_host")]
     pub broker_host: String,
