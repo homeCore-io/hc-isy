@@ -4,10 +4,10 @@
 //! Real-time events are delivered over a persistent WebSocket
 //! (`/rest/subscribe`) using the `ISYSUB` sub-protocol.
 
-use std::collections::HashMap;
 use anyhow::{bail, Context, Result};
 use quick_xml::events::Event as XmlEvent;
 use quick_xml::Reader;
+use std::collections::HashMap;
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -102,10 +102,7 @@ impl IsyEvent {
 /// `"13 A6 99 1"` → `"isy_13_a6_99_1"`
 /// `"00:3C:89:AB:00:00"` → `"isy_00_3c_89_ab_00_00"`
 pub fn addr_to_device_id(addr: &str) -> String {
-    let normalized = addr
-        .replace(' ', "_")
-        .replace(':', "_")
-        .to_lowercase();
+    let normalized = addr.replace(' ', "_").replace(':', "_").to_lowercase();
     format!("isy_{normalized}")
 }
 
@@ -122,20 +119,14 @@ pub fn addr_to_url(addr: &str) -> String {
 /// Thin wrapper around `reqwest::Client` for the ISY REST API.
 #[derive(Clone)]
 pub struct IsyClient {
-    http:     reqwest::Client,
+    http: reqwest::Client,
     base_url: String,
     username: String,
     password: String,
 }
 
 impl IsyClient {
-    pub fn new(
-        host:     &str,
-        port:     u16,
-        username: &str,
-        password: &str,
-        tls:      bool,
-    ) -> Result<Self> {
+    pub fn new(host: &str, port: u16, username: &str, password: &str, tls: bool) -> Result<Self> {
         let scheme = if tls { "https" } else { "http" };
         let base_url = format!("{scheme}://{host}:{port}");
 
@@ -157,7 +148,8 @@ impl IsyClient {
     /// Perform a GET request against the ISY REST API and return the body.
     async fn get_text(&self, path: &str) -> Result<String> {
         let url = format!("{}{}", self.base_url, path);
-        let resp = self.http
+        let resp = self
+            .http
             .get(&url)
             .basic_auth(&self.username, Some(&self.password))
             .send()
@@ -180,9 +172,7 @@ impl IsyClient {
 
     /// Fetch all current property values from `/rest/status`.
     /// Returns `address → { prop_id → IsyProperty }`.
-    pub async fn get_status(&self)
-        -> Result<HashMap<String, HashMap<String, IsyProperty>>>
-    {
+    pub async fn get_status(&self) -> Result<HashMap<String, HashMap<String, IsyProperty>>> {
         let xml = self.get_text("/rest/status").await?;
         parse_status_xml(&xml)
     }
@@ -192,29 +182,32 @@ impl IsyClient {
     /// - `addr`  – raw ISY address (`"13 A6 99 1"`)
     /// - `cmd`   – ISY command code (`"DON"`, `"DOF"`, `"LOCK"`, `"CLISPH"`, …)
     /// - `value` – optional 0–65535 value parameter
-    pub async fn send_cmd(
-        &self,
-        addr:  &str,
-        cmd:   &str,
-        value: Option<u32>,
-    ) -> Result<()> {
+    pub async fn send_cmd(&self, addr: &str, cmd: &str, value: Option<u32>) -> Result<()> {
         let encoded = addr_to_url(addr);
         let path = match value {
             Some(v) => format!("/rest/nodes/{encoded}/cmd/{cmd}/{v}"),
-            None    => format!("/rest/nodes/{encoded}/cmd/{cmd}"),
+            None => format!("/rest/nodes/{encoded}/cmd/{cmd}"),
         };
         let xml = self.get_text(&path).await?;
         if xml.contains("succeeded=\"false\"") {
-            bail!("ISY rejected command {cmd} on {addr}: {}", &xml[..xml.len().min(200)]);
+            bail!(
+                "ISY rejected command {cmd} on {addr}: {}",
+                &xml[..xml.len().min(200)]
+            );
         }
         Ok(())
     }
 
     /// Return the WebSocket subscription URL for this ISY.
     pub fn ws_url(&self) -> String {
-        let ws_scheme = if self.base_url.starts_with("https") { "wss" } else { "ws" };
+        let ws_scheme = if self.base_url.starts_with("https") {
+            "wss"
+        } else {
+            "ws"
+        };
         // Strip the http(s):// prefix to get host:port
-        let host_port = self.base_url
+        let host_port = self
+            .base_url
             .splitn(3, "://")
             .nth(1)
             .unwrap_or(self.base_url.as_str());
@@ -251,16 +244,21 @@ pub fn parse_nodes_xml(xml: &str) -> Result<Vec<IsyNode>> {
                 let tag = local_name_str(e.name().as_ref());
                 match tag.as_str() {
                     "node" => {
-                        current = Some(IsyNode { enabled: true, ..Default::default() });
+                        current = Some(IsyNode {
+                            enabled: true,
+                            ..Default::default()
+                        });
                     }
                     "group" => {
                         current = Some(IsyNode {
                             is_group: true,
-                            enabled:  true,
+                            enabled: true,
                             ..Default::default()
                         });
                     }
-                    _ => { current_elem = tag; }
+                    _ => {
+                        current_elem = tag;
+                    }
                 }
             }
 
@@ -277,12 +275,14 @@ pub fn parse_nodes_xml(xml: &str) -> Result<Vec<IsyNode>> {
 
             Ok(XmlEvent::Text(ref e)) => {
                 let text = e.unescape().unwrap_or_default().trim().to_string();
-                if text.is_empty() { continue; }
+                if text.is_empty() {
+                    continue;
+                }
                 if let Some(ref mut node) = current {
                     match current_elem.as_str() {
                         "address" => node.address = text,
-                        "name"    => node.name = text,
-                        "type"    => node.node_type = text,
+                        "name" => node.name = text,
+                        "type" => node.node_type = text,
                         "enabled" => node.enabled = text != "false",
                         _ => {}
                     }
@@ -331,13 +331,12 @@ pub fn parse_status_xml(xml: &str) -> Result<HashMap<String, HashMap<String, Isy
             }
 
             Ok(XmlEvent::Empty(ref e)) => {
-                if local_name_str(e.name().as_ref()) == "property"
-                    && !current_addr.is_empty()
-                {
+                if local_name_str(e.name().as_ref()) == "property" && !current_addr.is_empty() {
                     if let Some((id, prop)) = read_property_elem(e) {
-                        result.entry(current_addr.clone())
-                              .or_default()
-                              .insert(id, prop);
+                        result
+                            .entry(current_addr.clone())
+                            .or_default()
+                            .insert(id, prop);
                     }
                 }
             }
@@ -367,19 +366,19 @@ pub fn parse_event_xml(xml: &str) -> Option<IsyEvent> {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
 
-    let mut control    = String::new();
-    let mut node_addr  = String::new();
+    let mut control = String::new();
+    let mut node_addr = String::new();
     let mut value: i64 = 0;
-    let mut uom        = String::new();
-    let mut prec: u8   = 0;
-    let mut cur_elem   = String::new();
+    let mut uom = String::new();
+    let mut prec: u8 = 0;
+    let mut cur_elem = String::new();
 
     loop {
         match reader.read_event() {
             Ok(XmlEvent::Start(ref e)) => {
                 let tag = local_name_str(e.name().as_ref());
                 if tag == "action" {
-                    uom  = attr_str(e, b"uom").unwrap_or_default();
+                    uom = attr_str(e, b"uom").unwrap_or_default();
                     prec = attr_str(e, b"prec")
                         .and_then(|s| s.parse().ok())
                         .unwrap_or(0);
@@ -388,11 +387,13 @@ pub fn parse_event_xml(xml: &str) -> Option<IsyEvent> {
             }
             Ok(XmlEvent::Text(ref e)) => {
                 let text = e.unescape().unwrap_or_default().trim().to_string();
-                if text.is_empty() { continue; }
+                if text.is_empty() {
+                    continue;
+                }
                 match cur_elem.as_str() {
-                    "control" => control   = text,
-                    "node"    => node_addr = text,
-                    "action"  => value     = text.parse().unwrap_or(0),
+                    "control" => control = text,
+                    "node" => node_addr = text,
+                    "action" => value = text.parse().unwrap_or(0),
                     _ => {}
                 }
             }
@@ -402,9 +403,17 @@ pub fn parse_event_xml(xml: &str) -> Option<IsyEvent> {
         }
     }
 
-    if control.is_empty() { return None; }
+    if control.is_empty() {
+        return None;
+    }
 
-    Some(IsyEvent { control, node_addr, value, uom, prec })
+    Some(IsyEvent {
+        control,
+        node_addr,
+        value,
+        uom,
+        prec,
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -425,30 +434,38 @@ fn attr_str(e: &quick_xml::events::BytesStart<'_>, name: &[u8]) -> Option<String
 }
 
 /// Extract `(prop_id, IsyProperty)` from a `<property …/>` element.
-fn read_property_elem(
-    e: &quick_xml::events::BytesStart<'_>,
-) -> Option<(String, IsyProperty)> {
-    let mut id        = String::new();
+fn read_property_elem(e: &quick_xml::events::BytesStart<'_>) -> Option<(String, IsyProperty)> {
+    let mut id = String::new();
     let mut value_str = String::new();
     let mut formatted = String::new();
-    let mut uom       = String::new();
-    let mut prec: u8  = 0;
+    let mut uom = String::new();
+    let mut prec: u8 = 0;
 
     for attr in e.attributes().filter_map(|a| a.ok()) {
         let key = local_name_str(attr.key.as_ref());
         let val = attr.unescape_value().unwrap_or_default().to_string();
         match key.as_str() {
-            "id"        => id        = val,
-            "value"     => value_str = val,
+            "id" => id = val,
+            "value" => value_str = val,
             "formatted" => formatted = val,
-            "uom"       => uom       = val,
-            "prec"      => prec      = val.parse().unwrap_or(0),
+            "uom" => uom = val,
+            "prec" => prec = val.parse().unwrap_or(0),
             _ => {}
         }
     }
 
-    if id.is_empty() { return None; }
+    if id.is_empty() {
+        return None;
+    }
 
     let value = value_str.parse::<i64>().unwrap_or(0);
-    Some((id, IsyProperty { value, formatted, uom, prec }))
+    Some((
+        id,
+        IsyProperty {
+            value,
+            formatted,
+            uom,
+            prec,
+        },
+    ))
 }

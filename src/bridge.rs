@@ -68,7 +68,14 @@ impl Bridge {
     pub async fn run(mut self) -> Result<()> {
         let mut backoff = 2u64;
         loop {
-            match run_once(&self.config, &self.published_ids_cache_path, &self.publisher, &mut self.cmd_rx).await {
+            match run_once(
+                &self.config,
+                &self.published_ids_cache_path,
+                &self.publisher,
+                &mut self.cmd_rx,
+            )
+            .await
+            {
                 Ok(()) => {
                     info!("Bridge exited cleanly");
                     break;
@@ -103,7 +110,7 @@ async fn run_once(
     );
 
     let mut nodes = isy.get_nodes().await.context("GET /rest/nodes")?;
-    let status    = isy.get_status().await.context("GET /rest/status")?;
+    let status = isy.get_status().await.context("GET /rest/status")?;
 
     // Merge full property status into each node
     for node in &mut nodes {
@@ -135,17 +142,19 @@ async fn run_once(
     }
 
     let mut kinds: HashMap<String, DeviceKind> = HashMap::new();
-    let mut addrs: HashMap<String, String>     = HashMap::new();
+    let mut addrs: HashMap<String, String> = HashMap::new();
 
     for node in &nodes {
         if !node.enabled {
             debug!(addr = %node.address, "Skipping disabled node");
             continue;
         }
-        let kind      = classify_node(node);
+        let kind = classify_node(node);
         let device_id = node.device_id();
 
-        publisher.register_device_full(&device_id, &node.name, Some(kind.as_str()), None, None).await?;
+        publisher
+            .register_device_full(&device_id, &node.name, Some(kind.as_str()), None, None)
+            .await?;
         let state = node_to_state(node, &kind);
         publisher.publish_state(&device_id, &state).await?;
         publisher.publish_availability(&device_id, true).await?;
@@ -155,7 +164,10 @@ async fn run_once(
         addrs.insert(device_id.clone(), node.address.clone());
         kinds.insert(device_id, kind);
     }
-    info!(registered = kinds.len(), "All ISY devices registered with HomeCore");
+    info!(
+        registered = kinds.len(),
+        "All ISY devices registered with HomeCore"
+    );
     save_published_ids(published_ids_cache_path, &current_ids)?;
 
     let registry = Arc::new(Registry { kinds, addrs });
@@ -169,13 +181,15 @@ async fn run_once(
         .context("build WS request")?;
     {
         let h = ws_req.headers_mut();
-        h.insert("Authorization",
-                 HeaderValue::from_str(&isy.basic_auth_header())
-                     .context("auth header")?);
-        h.insert("Sec-WebSocket-Protocol",
-                 HeaderValue::from_static("ISYSUB"));
-        h.insert("Origin",
-                 HeaderValue::from_static("com.universal-devices.websockets.isy"));
+        h.insert(
+            "Authorization",
+            HeaderValue::from_str(&isy.basic_auth_header()).context("auth header")?,
+        );
+        h.insert("Sec-WebSocket-Protocol", HeaderValue::from_static("ISYSUB"));
+        h.insert(
+            "Origin",
+            HeaderValue::from_static("com.universal-devices.websockets.isy"),
+        );
     }
     let (ws_stream, _) = connect_async(ws_req)
         .await
@@ -221,17 +235,14 @@ async fn run_once(
 // Command handler
 // ---------------------------------------------------------------------------
 
-async fn handle_command(
-    device_id: &str,
-    payload: &Value,
-    isy: &IsyClient,
-    registry: &Registry,
-) {
+async fn handle_command(device_id: &str, payload: &Value, isy: &IsyClient, registry: &Registry) {
     let Some(kind) = registry.kind(device_id) else {
         debug!(device_id = %device_id, "Unknown device — ignoring cmd");
         return;
     };
-    let Some(addr) = registry.addr(device_id) else { return };
+    let Some(addr) = registry.addr(device_id) else {
+        return;
+    };
 
     let cmds = cmd_to_isy(payload, kind);
     if cmds.is_empty() {
@@ -257,10 +268,14 @@ async fn handle_command(
 async fn handle_ws_event(text: &str, publisher: &DevicePublisher, reg: &Registry) {
     // The ISY may batch multiple XML events in one frame; split on </Event>
     for part in text.split("</Event>") {
-        if part.trim().is_empty() { continue; }
+        if part.trim().is_empty() {
+            continue;
+        }
         let xml = format!("{part}</Event>");
 
-        let Some(event) = parse_event_xml(&xml) else { continue };
+        let Some(event) = parse_event_xml(&xml) else {
+            continue;
+        };
 
         if event.is_system() {
             debug!(control = %event.control, "ISY system/heartbeat event");

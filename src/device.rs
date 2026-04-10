@@ -4,8 +4,8 @@
 //! and canonical JSON state, and translates HomeCore commands back to
 //! ISY REST command codes.
 
-use serde_json::{json, Value};
 use crate::isy::{IsyEvent, IsyNode};
+use serde_json::{json, Value};
 
 // ---------------------------------------------------------------------------
 // Device classification
@@ -31,18 +31,18 @@ pub enum DeviceKind {
 impl DeviceKind {
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Light         => "light",
-            Self::Switch        => "switch",
+            Self::Light => "light",
+            Self::Switch => "switch",
             Self::ContactSensor => "contact_sensor",
-            Self::MotionSensor  => "motion_sensor",
-            Self::WaterSensor   => "water_sensor",
-            Self::BinarySensor  => "binary_sensor",
-            Self::Sensor        => "sensor",
-            Self::Lock          => "lock",
-            Self::Cover         => "cover",
-            Self::Fan           => "fan",
-            Self::Thermostat    => "thermostat",
-            Self::Scene         => "scene",
+            Self::MotionSensor => "motion_sensor",
+            Self::WaterSensor => "water_sensor",
+            Self::BinarySensor => "binary_sensor",
+            Self::Sensor => "sensor",
+            Self::Lock => "lock",
+            Self::Cover => "cover",
+            Self::Fan => "fan",
+            Self::Thermostat => "thermostat",
+            Self::Scene => "scene",
         }
     }
 }
@@ -75,12 +75,20 @@ pub fn classify_node(node: &IsyNode) -> DeviceKind {
         return DeviceKind::Cover;
     }
 
-    let st_uom = node.properties.get("ST").map(|p| p.uom.as_str()).unwrap_or("");
+    let st_uom = node
+        .properties
+        .get("ST")
+        .map(|p| p.uom.as_str())
+        .unwrap_or("");
 
     match st_uom {
         // UOM 51/100 = percentage — dimmable if category 1, else level sensor
         "51" | "100" => {
-            if t.starts_with("1.") { DeviceKind::Light } else { DeviceKind::Sensor }
+            if t.starts_with("1.") {
+                DeviceKind::Light
+            } else {
+                DeviceKind::Sensor
+            }
         }
 
         // UOM 78 = on/off binary
@@ -133,26 +141,70 @@ fn classify_binary_sensor(node: &IsyNode) -> DeviceKind {
 fn is_physical_uom(uom: &str) -> bool {
     matches!(
         uom,
-        "1" | "3" | "4" | "5" | "17" | "19" | "20" | "22" | "23" | "24" |
-        "26" | "30" | "31" | "32" | "33" | "38" | "40" | "41" | "42" | "43" |
-        "44" | "45" | "48" | "50" | "52" | "53" | "55" | "57" | "59" | "60" |
-        "61" | "62" | "66" | "71" | "73" | "74" | "101" | "102" | "103" | "104"
+        "1" | "3"
+            | "4"
+            | "5"
+            | "17"
+            | "19"
+            | "20"
+            | "22"
+            | "23"
+            | "24"
+            | "26"
+            | "30"
+            | "31"
+            | "32"
+            | "33"
+            | "38"
+            | "40"
+            | "41"
+            | "42"
+            | "43"
+            | "44"
+            | "45"
+            | "48"
+            | "50"
+            | "52"
+            | "53"
+            | "55"
+            | "57"
+            | "59"
+            | "60"
+            | "61"
+            | "62"
+            | "66"
+            | "71"
+            | "73"
+            | "74"
+            | "101"
+            | "102"
+            | "103"
+            | "104"
     )
 }
 
 /// Derive the device class for a binary sensor from its Insteon type code.
 pub fn binary_sensor_device_class(node_type: &str) -> Option<&'static str> {
     let t = node_type;
-    if t.starts_with("16.1.") || t.starts_with("16.4.") || t.starts_with("16.5.")
-    || t.starts_with("16.3.") || t.starts_with("16.22.") {
+    if t.starts_with("16.1.")
+        || t.starts_with("16.4.")
+        || t.starts_with("16.5.")
+        || t.starts_with("16.3.")
+        || t.starts_with("16.22.")
+    {
         return Some("motion");
     }
     if t.starts_with("16.8.") || t.starts_with("16.13.") || t.starts_with("16.14.") {
         return Some("moisture");
     }
-    if t.starts_with("16.9.") || t.starts_with("16.6.") || t.starts_with("16.7.")
-    || t.starts_with("16.2.") || t.starts_with("16.17.") || t.starts_with("16.20.")
-    || t.starts_with("16.21.") {
+    if t.starts_with("16.9.")
+        || t.starts_with("16.6.")
+        || t.starts_with("16.7.")
+        || t.starts_with("16.2.")
+        || t.starts_with("16.17.")
+        || t.starts_with("16.20.")
+        || t.starts_with("16.21.")
+    {
         return Some("opening");
     }
     None
@@ -165,36 +217,36 @@ pub fn binary_sensor_device_class(node_type: &str) -> Option<&'static str> {
 /// Map an ISY UOM code to a human-readable unit string.
 pub fn uom_unit(uom: &str) -> Option<&'static str> {
     match uom {
-        "1"   => Some("A"),
-        "4"   => Some("°C"),
-        "5"   => Some("°C"),
-        "17"  => Some("°F"),
-        "19"  => Some("°F"),
-        "20"  => Some("ft/s"),
-        "22"  => Some("Hz"),
-        "23"  => Some("inHg"),
-        "30"  => Some("lx"),
-        "31"  => Some("lm"),
-        "32"  => Some("V"),
-        "33"  => Some("W"),
-        "38"  => Some("W/m²"),
-        "40"  => Some("kWh"),
-        "41"  => Some("mm/hr"),
-        "42"  => Some("hPa"),
-        "43"  => Some("kg"),
-        "45"  => Some("%"),
-        "48"  => Some("kΩ"),
-        "50"  => Some("mph"),
-        "51"  => Some("%"),
-        "52"  => Some("kPa"),
-        "53"  => Some("psi"),
-        "57"  => Some("UV index"),
-        "62"  => Some("m/s"),
-        "66"  => Some("µg/m³"),
-        "71"  => Some("mbar"),
-        "73"  => Some("W"),
-        "74"  => Some("%"),
-        _     => None,
+        "1" => Some("A"),
+        "4" => Some("°C"),
+        "5" => Some("°C"),
+        "17" => Some("°F"),
+        "19" => Some("°F"),
+        "20" => Some("ft/s"),
+        "22" => Some("Hz"),
+        "23" => Some("inHg"),
+        "30" => Some("lx"),
+        "31" => Some("lm"),
+        "32" => Some("V"),
+        "33" => Some("W"),
+        "38" => Some("W/m²"),
+        "40" => Some("kWh"),
+        "41" => Some("mm/hr"),
+        "42" => Some("hPa"),
+        "43" => Some("kg"),
+        "45" => Some("%"),
+        "48" => Some("kΩ"),
+        "50" => Some("mph"),
+        "51" => Some("%"),
+        "52" => Some("kPa"),
+        "53" => Some("psi"),
+        "57" => Some("UV index"),
+        "62" => Some("m/s"),
+        "66" => Some("µg/m³"),
+        "71" => Some("mbar"),
+        "73" => Some("W"),
+        "74" => Some("%"),
+        _ => None,
     }
 }
 
@@ -207,12 +259,12 @@ pub fn uom_unit(uom: &str) -> Option<&'static str> {
 /// `/rest/status`.
 pub fn node_to_state(node: &IsyNode, kind: &DeviceKind) -> Value {
     let st = node.properties.get("ST");
-    let st_value   = st.map(|p| p.value).unwrap_or(0);
-    let st_uom     = st.map(|p| p.uom.as_str()).unwrap_or("");
+    let st_value = st.map(|p| p.value).unwrap_or(0);
+    let st_uom = st.map(|p| p.uom.as_str()).unwrap_or("");
 
     match kind {
         DeviceKind::Light => {
-            let brightness    = st_value.clamp(0, 255) as u8;
+            let brightness = st_value.clamp(0, 255) as u8;
             let brightness_pct = (brightness as u32 * 100 / 255) as u8;
             json!({
                 "on":             brightness > 0,
@@ -252,10 +304,10 @@ pub fn node_to_state(node: &IsyNode, kind: &DeviceKind) -> Value {
         DeviceKind::BinarySensor => {
             // Insteon leak/moisture sensors report ON when DRY → invert.
             let t = node.node_type.as_str();
-            let inverted = t.starts_with("16.8.") || t.starts_with("16.13.")
-                        || t.starts_with("16.14.");
+            let inverted =
+                t.starts_with("16.8.") || t.starts_with("16.13.") || t.starts_with("16.14.");
             let raw_on = st_value > 0;
-            let on     = if inverted { !raw_on } else { raw_on };
+            let on = if inverted { !raw_on } else { raw_on };
 
             let mut obj = json!({ "on": on });
             if let Some(dc) = binary_sensor_device_class(t) {
@@ -266,7 +318,7 @@ pub fn node_to_state(node: &IsyNode, kind: &DeviceKind) -> Value {
 
         DeviceKind::Sensor => {
             let value = st.map(|p| p.as_f64()).unwrap_or(0.0);
-            let unit  = uom_unit(st_uom).unwrap_or("");
+            let unit = uom_unit(st_uom).unwrap_or("");
             json!({ "value": value, "unit": unit })
         }
 
@@ -277,7 +329,7 @@ pub fn node_to_state(node: &IsyNode, kind: &DeviceKind) -> Value {
 
         DeviceKind::Cover => {
             let position = (st_value.clamp(0, 255) as u32 * 100 / 255) as u8;
-            let state    = if st_value == 0 { "closed" } else { "open" };
+            let state = if st_value == 0 { "closed" } else { "open" };
             json!({ "position": position, "state": state })
         }
 
@@ -290,11 +342,14 @@ pub fn node_to_state(node: &IsyNode, kind: &DeviceKind) -> Value {
             let mut obj = serde_json::Map::new();
 
             // Operating state from ST (0=idle, 1=heating, 2=cooling)
-            obj.insert("state".into(), json!(match st_value {
-                1 => "heating",
-                2 => "cooling",
-                _ => "idle",
-            }));
+            obj.insert(
+                "state".into(),
+                json!(match st_value {
+                    1 => "heating",
+                    2 => "cooling",
+                    _ => "idle",
+                }),
+            );
 
             if let Some(p) = node.properties.get("CLITEMP") {
                 obj.insert("temperature".into(), json!(p.as_f64()));
@@ -309,7 +364,10 @@ pub fn node_to_state(node: &IsyNode, kind: &DeviceKind) -> Value {
                 obj.insert("target_temp_cool".into(), json!(p.as_f64()));
             }
             if let Some(p) = node.properties.get("CLIFAN") {
-                obj.insert("fan_mode".into(), json!(if p.value == 7 { "on" } else { "auto" }));
+                obj.insert(
+                    "fan_mode".into(),
+                    json!(if p.value == 7 { "on" } else { "auto" }),
+                );
             }
 
             Value::Object(obj)
@@ -329,14 +387,13 @@ pub fn node_to_state(node: &IsyNode, kind: &DeviceKind) -> Value {
 /// Translate an ISY real-time event into a HomeCore partial state JSON patch.
 /// Returns `None` if the event should be ignored for this device kind.
 pub fn event_to_patch(event: &IsyEvent, kind: &DeviceKind) -> Option<Value> {
-    let v    = event.value;
+    let v = event.value;
     let real = event.real_value();
 
     match (kind, event.control.as_str()) {
         // ── Light ──────────────────────────────────────────────────────────
-        (DeviceKind::Light, "ST") | (DeviceKind::Light, "DON")
-        | (DeviceKind::Light, "DFON") => {
-            let brightness    = v.clamp(0, 255) as u8;
+        (DeviceKind::Light, "ST") | (DeviceKind::Light, "DON") | (DeviceKind::Light, "DFON") => {
+            let brightness = v.clamp(0, 255) as u8;
             let brightness_pct = (brightness as u32 * 100 / 255) as u8;
             Some(json!({
                 "on":             brightness > 0,
@@ -349,11 +406,10 @@ pub fn event_to_patch(event: &IsyEvent, kind: &DeviceKind) -> Option<Value> {
         }
 
         // ── Switch ─────────────────────────────────────────────────────────
-        (DeviceKind::Switch, "ST") | (DeviceKind::Switch, "DON")
-        | (DeviceKind::Switch, "DFON") => Some(json!({ "on": v > 0 })),
-        (DeviceKind::Switch, "DOF") | (DeviceKind::Switch, "DFOF") => {
-            Some(json!({ "on": false }))
+        (DeviceKind::Switch, "ST") | (DeviceKind::Switch, "DON") | (DeviceKind::Switch, "DFON") => {
+            Some(json!({ "on": v > 0 }))
         }
+        (DeviceKind::Switch, "DOF") | (DeviceKind::Switch, "DFOF") => Some(json!({ "on": false })),
 
         // ── Contact Sensor ────────────────────────────────────────────────
         (DeviceKind::ContactSensor, "ST")
@@ -391,9 +447,7 @@ pub fn event_to_patch(event: &IsyEvent, kind: &DeviceKind) -> Option<Value> {
         // ── Binary Sensor ──────────────────────────────────────────────────
         (DeviceKind::BinarySensor, "ST")
         | (DeviceKind::BinarySensor, "DON")
-        | (DeviceKind::BinarySensor, "DOF") => {
-            Some(json!({ "on": v > 0 }))
-        }
+        | (DeviceKind::BinarySensor, "DOF") => Some(json!({ "on": v > 0 })),
 
         // ── Sensor ─────────────────────────────────────────────────────────
         (DeviceKind::Sensor, "ST") => {
@@ -416,14 +470,10 @@ pub fn event_to_patch(event: &IsyEvent, kind: &DeviceKind) -> Option<Value> {
             let position = (v.clamp(0, 255) as u32 * 100 / 255) as u8;
             Some(json!({ "position": position, "state": if v == 0 { "closed" } else { "open" } }))
         }
-        (DeviceKind::Cover, "DOF") => {
-            Some(json!({ "position": 0u8, "state": "closed" }))
-        }
+        (DeviceKind::Cover, "DOF") => Some(json!({ "position": 0u8, "state": "closed" })),
 
         // ── Scene ──────────────────────────────────────────────────────────
-        (DeviceKind::Scene, "ST") | (DeviceKind::Scene, "DON") => {
-            Some(json!({ "on": v > 0 }))
-        }
+        (DeviceKind::Scene, "ST") | (DeviceKind::Scene, "DON") => Some(json!({ "on": v > 0 })),
         (DeviceKind::Scene, "DOF") => Some(json!({ "on": false })),
 
         // ── Thermostat ─────────────────────────────────────────────────────
@@ -431,10 +481,10 @@ pub fn event_to_patch(event: &IsyEvent, kind: &DeviceKind) -> Option<Value> {
             Some(json!({ "state": match v { 1 => "heating", 2 => "cooling", _ => "idle" } }))
         }
         (DeviceKind::Thermostat, "CLITEMP") => Some(json!({ "temperature": real })),
-        (DeviceKind::Thermostat, "CLIMD")   => Some(json!({ "hvac_mode": hvac_mode_str(v) })),
-        (DeviceKind::Thermostat, "CLISPH")  => Some(json!({ "target_temp_heat": real })),
-        (DeviceKind::Thermostat, "CLISPC")  => Some(json!({ "target_temp_cool": real })),
-        (DeviceKind::Thermostat, "CLIFAN")  => {
+        (DeviceKind::Thermostat, "CLIMD") => Some(json!({ "hvac_mode": hvac_mode_str(v) })),
+        (DeviceKind::Thermostat, "CLISPH") => Some(json!({ "target_temp_heat": real })),
+        (DeviceKind::Thermostat, "CLISPC") => Some(json!({ "target_temp_cool": real })),
+        (DeviceKind::Thermostat, "CLIFAN") => {
             Some(json!({ "fan_mode": if v == 7 { "on" } else { "auto" } }))
         }
 
@@ -448,7 +498,7 @@ pub fn event_to_patch(event: &IsyEvent, kind: &DeviceKind) -> Option<Value> {
 
 /// The ISY REST command to send for a given HomeCore command payload.
 pub struct IsyCmd {
-    pub cmd:   &'static str,
+    pub cmd: &'static str,
     pub value: Option<u32>,
 }
 
@@ -457,46 +507,82 @@ pub struct IsyCmd {
 /// Most device types produce a single command.  Thermostats can produce
 /// multiple (one per attribute being set).
 pub fn cmd_to_isy(payload: &Value, kind: &DeviceKind) -> Vec<IsyCmd> {
-    let Some(obj) = payload.as_object() else { return vec![] };
+    let Some(obj) = payload.as_object() else {
+        return vec![];
+    };
 
     match kind {
         DeviceKind::Light => {
             if obj.get("on").and_then(Value::as_bool) == Some(false) {
-                return vec![IsyCmd { cmd: "DOF", value: None }];
+                return vec![IsyCmd {
+                    cmd: "DOF",
+                    value: None,
+                }];
             }
             if let Some(br) = obj.get("brightness").and_then(Value::as_u64) {
-                return vec![IsyCmd { cmd: "DON", value: Some(br.clamp(0, 255) as u32) }];
+                return vec![IsyCmd {
+                    cmd: "DON",
+                    value: Some(br.clamp(0, 255) as u32),
+                }];
             }
             if let Some(pct) = obj.get("brightness_pct").and_then(Value::as_u64) {
                 let v = (pct.clamp(0, 100) as u32 * 255 / 100).min(255);
-                return vec![IsyCmd { cmd: "DON", value: Some(v) }];
+                return vec![IsyCmd {
+                    cmd: "DON",
+                    value: Some(v),
+                }];
             }
             if obj.get("on").and_then(Value::as_bool) == Some(true) {
-                return vec![IsyCmd { cmd: "DON", value: None }];
+                return vec![IsyCmd {
+                    cmd: "DON",
+                    value: None,
+                }];
             }
             vec![]
         }
 
-        DeviceKind::Switch | DeviceKind::Scene => {
-            match obj.get("on").and_then(Value::as_bool) {
-                Some(true)  => vec![IsyCmd { cmd: "DON", value: None }],
-                Some(false) => vec![IsyCmd { cmd: "DOF", value: None }],
-                None        => vec![],
-            }
-        }
+        DeviceKind::Switch | DeviceKind::Scene => match obj.get("on").and_then(Value::as_bool) {
+            Some(true) => vec![IsyCmd {
+                cmd: "DON",
+                value: None,
+            }],
+            Some(false) => vec![IsyCmd {
+                cmd: "DOF",
+                value: None,
+            }],
+            None => vec![],
+        },
 
         DeviceKind::Fan => {
             if obj.get("on").and_then(Value::as_bool) == Some(false) {
-                return vec![IsyCmd { cmd: "DOF", value: None }];
+                return vec![IsyCmd {
+                    cmd: "DOF",
+                    value: None,
+                }];
             }
             match obj.get("speed").and_then(Value::as_str) {
-                Some("off")    => vec![IsyCmd { cmd: "DOF", value: None }],
-                Some("low")    => vec![IsyCmd { cmd: "DON", value: Some(63) }],
-                Some("medium") => vec![IsyCmd { cmd: "DON", value: Some(127) }],
-                Some("high")   => vec![IsyCmd { cmd: "DON", value: Some(255) }],
+                Some("off") => vec![IsyCmd {
+                    cmd: "DOF",
+                    value: None,
+                }],
+                Some("low") => vec![IsyCmd {
+                    cmd: "DON",
+                    value: Some(63),
+                }],
+                Some("medium") => vec![IsyCmd {
+                    cmd: "DON",
+                    value: Some(127),
+                }],
+                Some("high") => vec![IsyCmd {
+                    cmd: "DON",
+                    value: Some(255),
+                }],
                 _ => {
                     if obj.get("on").and_then(Value::as_bool) == Some(true) {
-                        vec![IsyCmd { cmd: "DON", value: Some(127) }]  // default medium
+                        vec![IsyCmd {
+                            cmd: "DON",
+                            value: Some(127),
+                        }] // default medium
                     } else {
                         vec![]
                     }
@@ -504,23 +590,36 @@ pub fn cmd_to_isy(payload: &Value, kind: &DeviceKind) -> Vec<IsyCmd> {
             }
         }
 
-        DeviceKind::Lock => {
-            match obj.get("locked").and_then(Value::as_bool) {
-                Some(true)  => vec![IsyCmd { cmd: "LOCK",   value: None }],
-                Some(false) => vec![IsyCmd { cmd: "UNLOCK", value: None }],
-                None        => vec![],
-            }
-        }
+        DeviceKind::Lock => match obj.get("locked").and_then(Value::as_bool) {
+            Some(true) => vec![IsyCmd {
+                cmd: "LOCK",
+                value: None,
+            }],
+            Some(false) => vec![IsyCmd {
+                cmd: "UNLOCK",
+                value: None,
+            }],
+            None => vec![],
+        },
 
         DeviceKind::Cover => {
             if let Some(pos) = obj.get("position").and_then(Value::as_u64) {
                 let v = (pos.clamp(0, 100) as u32 * 255 / 100).min(255);
-                return vec![IsyCmd { cmd: "DON", value: Some(v) }];
+                return vec![IsyCmd {
+                    cmd: "DON",
+                    value: Some(v),
+                }];
             }
             match obj.get("state").and_then(Value::as_str) {
-                Some("open")   => vec![IsyCmd { cmd: "DON", value: Some(255) }],
-                Some("closed") => vec![IsyCmd { cmd: "DOF", value: None }],
-                _              => vec![],
+                Some("open") => vec![IsyCmd {
+                    cmd: "DON",
+                    value: Some(255),
+                }],
+                Some("closed") => vec![IsyCmd {
+                    cmd: "DOF",
+                    value: None,
+                }],
+                _ => vec![],
             }
         }
 
@@ -529,17 +628,35 @@ pub fn cmd_to_isy(payload: &Value, kind: &DeviceKind) -> Vec<IsyCmd> {
             let mut cmds = Vec::new();
             if let Some(hs) = obj.get("target_temp_heat").and_then(Value::as_f64) {
                 // ISY expects temperature × 10
-                cmds.push(IsyCmd { cmd: "CLISPH", value: Some((hs * 10.0) as u32) });
+                cmds.push(IsyCmd {
+                    cmd: "CLISPH",
+                    value: Some((hs * 10.0) as u32),
+                });
             }
             if let Some(cs) = obj.get("target_temp_cool").and_then(Value::as_f64) {
-                cmds.push(IsyCmd { cmd: "CLISPC", value: Some((cs * 10.0) as u32) });
+                cmds.push(IsyCmd {
+                    cmd: "CLISPC",
+                    value: Some((cs * 10.0) as u32),
+                });
             }
             if let Some(mode) = obj.get("hvac_mode").and_then(Value::as_str) {
-                let v = match mode { "off" => 0, "heat" => 1, "cool" => 2, "auto" => 3, _ => return cmds };
-                cmds.push(IsyCmd { cmd: "CLIMD", value: Some(v) });
+                let v = match mode {
+                    "off" => 0,
+                    "heat" => 1,
+                    "cool" => 2,
+                    "auto" => 3,
+                    _ => return cmds,
+                };
+                cmds.push(IsyCmd {
+                    cmd: "CLIMD",
+                    value: Some(v),
+                });
             }
             if let Some(fan) = obj.get("fan_mode").and_then(Value::as_str) {
-                cmds.push(IsyCmd { cmd: "CLIFAN", value: Some(if fan == "on" { 7 } else { 0 }) });
+                cmds.push(IsyCmd {
+                    cmd: "CLIFAN",
+                    value: Some(if fan == "on" { 7 } else { 0 }),
+                });
             }
             cmds
         }
@@ -559,15 +676,20 @@ pub fn cmd_to_isy(payload: &Value, kind: &DeviceKind) -> Vec<IsyCmd> {
 
 fn fan_speed_from_value(value: i64) -> (bool, &'static str) {
     match value {
-        0        => (false, "off"),
-        1..=84   => (true,  "low"),
-        85..=168 => (true,  "medium"),
-        _        => (true,  "high"),
+        0 => (false, "off"),
+        1..=84 => (true, "low"),
+        85..=168 => (true, "medium"),
+        _ => (true, "high"),
     }
 }
 
 fn hvac_mode_str(value: i64) -> &'static str {
-    match value { 1 => "heat", 2 => "cool", 3 => "auto", _ => "off" }
+    match value {
+        1 => "heat",
+        2 => "cool",
+        3 => "auto",
+        _ => "off",
+    }
 }
 
 #[cfg(test)]

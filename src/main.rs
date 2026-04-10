@@ -54,7 +54,7 @@ async fn main() {
     let (_log_guard, log_level_handle, mqtt_log_handle) = init_logging(&config_path);
 
     let cfg = match Config::load(&config_path) {
-        Ok(c)  => c,
+        Ok(c) => c,
         Err(e) => {
             error!(error = %e, path = %config_path, "Failed to load config");
             std::process::exit(1);
@@ -63,7 +63,14 @@ async fn main() {
 
     for attempt in 1..=MAX_ATTEMPTS {
         info!(attempt, max = MAX_ATTEMPTS, "Starting hc-isy plugin");
-        match try_start(&cfg, &config_path, log_level_handle.clone(), mqtt_log_handle.clone()).await {
+        match try_start(
+            &cfg,
+            &config_path,
+            log_level_handle.clone(),
+            mqtt_log_handle.clone(),
+        )
+        .await
+        {
             Ok(()) => return,
             Err(e) => {
                 if attempt < MAX_ATTEMPTS {
@@ -86,7 +93,13 @@ async fn main() {
 // Logging: stderr (RUST_LOG filtered) + rotating compressed file in logs/
 // ---------------------------------------------------------------------------
 
-fn init_logging(config_path: &str) -> (tracing_appender::non_blocking::WorkerGuard, hc_logging::LogLevelHandle, plugin_sdk_rs::mqtt_log_layer::MqttLogHandle) {
+fn init_logging(
+    config_path: &str,
+) -> (
+    tracing_appender::non_blocking::WorkerGuard,
+    hc_logging::LogLevelHandle,
+    plugin_sdk_rs::mqtt_log_layer::MqttLogHandle,
+) {
     #[derive(serde::Deserialize, Default)]
     struct Bootstrap {
         #[serde(default)]
@@ -113,8 +126,8 @@ async fn try_start(
     let sdk_config = PluginConfig {
         broker_host: cfg.homecore.broker_host.clone(),
         broker_port: cfg.homecore.broker_port,
-        plugin_id:   cfg.homecore.plugin_id.clone(),
-        password:    cfg.homecore.password.clone(),
+        plugin_id: cfg.homecore.plugin_id.clone(),
+        password: cfg.homecore.password.clone(),
     };
 
     let client = PluginClient::connect(sdk_config).await?;
