@@ -12,7 +12,6 @@
 //! 6. Reconnect on any error with exponential back-off
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -59,7 +58,6 @@ impl Registry {
 
 pub struct Bridge {
     pub config: Config,
-    pub published_ids_cache_path: PathBuf,
     pub publisher: DevicePublisher,
     pub cmd_rx: mpsc::Receiver<(String, Value)>,
 }
@@ -68,14 +66,7 @@ impl Bridge {
     pub async fn run(mut self) -> Result<()> {
         let mut backoff = 2u64;
         loop {
-            match run_once(
-                &self.config,
-                &self.published_ids_cache_path,
-                &self.publisher,
-                &mut self.cmd_rx,
-            )
-            .await
-            {
+            match run_once(&self.config, &self.publisher, &mut self.cmd_rx).await {
                 Ok(()) => {
                     info!("Bridge exited cleanly");
                     break;
@@ -93,7 +84,6 @@ impl Bridge {
 
 async fn run_once(
     cfg: &Config,
-    published_ids_cache_path: &Path,
     publisher: &DevicePublisher,
     cmd_rx: &mut mpsc::Receiver<(String, Value)>,
 ) -> Result<()> {
@@ -123,22 +113,16 @@ async fn run_once(
     info!(total = nodes.len(), "Loaded ISY nodes");
 
     // ── Register devices and build registry ───────────────────────────
-    let plugin_id = publisher.plugin_id();
-    let current_ids: Vec<String> = nodes
+    let current_ids: std::collections::HashSet<String> = nodes
         .iter()
         .filter(|node| node.enabled)
         .map(|node| node.device_id())
         .collect();
 
-    for stale_id in load_published_ids(published_ids_cache_path)
-        .into_iter()
-        .filter(|device_id| !current_ids.iter().any(|current| current == device_id))
-    {
-        if let Err(e) = publisher.unregister_device(plugin_id, &stale_id).await {
-            warn!(device_id = %stale_id, error = %e, "Failed to unregister stale ISY device");
-        } else {
-            info!(device_id = %stale_id, "Unregistered stale ISY device");
-        }
+    // SDK reconcile against the persisted set: anything from a prior
+    // session that isn't in `current_ids` gets unregistered.
+    if let Err(e) = publisher.reconcile_devices(current_ids.clone()).await {
+        warn!(error = %e, "reconcile_devices failed");
     }
 
     let mut kinds: HashMap<String, DeviceKind> = HashMap::new();
@@ -168,7 +152,6 @@ async fn run_once(
         registered = kinds.len(),
         "All ISY devices registered with HomeCore"
     );
-    save_published_ids(published_ids_cache_path, &current_ids)?;
 
     let registry = Arc::new(Registry { kinds, addrs });
 
@@ -299,19 +282,3 @@ async fn handle_ws_event(text: &str, publisher: &DevicePublisher, reg: &Registry
     }
 }
 
-// ---------------------------------------------------------------------------
-// Published-ID cache (for stale device cleanup)
-// ---------------------------------------------------------------------------
-
-fn load_published_ids(path: &Path) -> Vec<String> {
-    std::fs::read_to_string(path)
-        .ok()
-        .and_then(|text| serde_json::from_str::<Vec<String>>(&text).ok())
-        .unwrap_or_default()
-}
-
-fn save_published_ids(path: &Path, device_ids: &[String]) -> Result<()> {
-    let payload = serde_json::to_vec_pretty(device_ids)?;
-    std::fs::write(path, payload)?;
-    Ok(())
-}

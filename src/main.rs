@@ -130,7 +130,12 @@ async fn try_start(
         password: cfg.homecore.password.clone(),
     };
 
-    let client = PluginClient::connect(sdk_config).await?;
+    let client = PluginClient::connect(sdk_config)
+        .await?
+        // Cross-restart device tracking via the SDK. Same path the
+        // plugin used to manage by hand, so existing snapshots are
+        // picked up unchanged.
+        .with_device_persistence(published_ids_cache_path(config_path));
     mqtt_log_handle.connect(
         client.mqtt_client(),
         &cfg.homecore.plugin_id,
@@ -184,7 +189,6 @@ async fn try_start(
     // --- Bridge event loop (runs until error / shutdown) ----------------------
     let bridge = Bridge {
         config: cfg.clone(),
-        published_ids_cache_path: published_ids_cache_path(config_path),
         publisher,
         cmd_rx,
     };
