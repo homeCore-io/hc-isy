@@ -281,4 +281,3 @@ async fn handle_ws_event(text: &str, publisher: &DevicePublisher, reg: &Registry
         }
     }
 }
-
