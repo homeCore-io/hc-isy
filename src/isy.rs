@@ -324,14 +324,13 @@ pub fn parse_status_xml(xml: &str) -> Result<HashMap<String, HashMap<String, Isy
 
     loop {
         match reader.read_event() {
-            Ok(XmlEvent::Start(ref e)) => {
-                if local_name_str(e.name().as_ref()) == "node" {
+            Ok(XmlEvent::Start(ref e))
+                if local_name_str(e.name().as_ref()) == "node" => {
                     current_addr = attr_str(e, b"id").unwrap_or_default();
                 }
-            }
 
-            Ok(XmlEvent::Empty(ref e)) => {
-                if local_name_str(e.name().as_ref()) == "property" && !current_addr.is_empty() {
+            Ok(XmlEvent::Empty(ref e))
+                if local_name_str(e.name().as_ref()) == "property" && !current_addr.is_empty() => {
                     if let Some((id, prop)) = read_property_elem(e) {
                         result
                             .entry(current_addr.clone())
@@ -339,13 +338,11 @@ pub fn parse_status_xml(xml: &str) -> Result<HashMap<String, HashMap<String, Isy
                             .insert(id, prop);
                     }
                 }
-            }
 
-            Ok(XmlEvent::End(ref e)) => {
-                if local_name_str(e.name().as_ref()) == "node" {
+            Ok(XmlEvent::End(ref e))
+                if local_name_str(e.name().as_ref()) == "node" => {
                     current_addr.clear();
                 }
-            }
 
             Ok(XmlEvent::Eof) => break,
             Err(e) => bail!("XML error in /rest/status: {e}"),
