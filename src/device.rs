@@ -119,9 +119,8 @@ pub fn classify_node(node: &IsyNode) -> DeviceKind {
                 DeviceKind::Sensor
             } else if t.starts_with("1.") {
                 DeviceKind::Light
-            } else if t.starts_with("2.") {
-                DeviceKind::Switch
             } else {
+                // 2.* explicitly + everything else default to Switch.
                 DeviceKind::Switch
             }
         }

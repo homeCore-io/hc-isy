@@ -102,7 +102,7 @@ impl IsyEvent {
 /// `"13 A6 99 1"` → `"isy_13_a6_99_1"`
 /// `"00:3C:89:AB:00:00"` → `"isy_00_3c_89_ab_00_00"`
 pub fn addr_to_device_id(addr: &str) -> String {
-    let normalized = addr.replace(' ', "_").replace(':', "_").to_lowercase();
+    let normalized = addr.replace([' ', ':'], "_").to_lowercase();
     format!("isy_{normalized}")
 }
 
@@ -208,7 +208,7 @@ impl IsyClient {
         // Strip the http(s):// prefix to get host:port
         let host_port = self
             .base_url
-            .splitn(3, "://")
+            .split("://")
             .nth(1)
             .unwrap_or(self.base_url.as_str());
         format!("{ws_scheme}://{host_port}/rest/subscribe")
