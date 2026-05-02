@@ -41,8 +41,10 @@ port = 80
 
 # ISY administrator credentials.  These are the same credentials used
 # in the ISY Admin Console (Java Web Start application).
-username = "admin"
-password = "admin"
+# Replace with the credentials from your ISY — do not ship a unit
+# running the factory default admin/admin password.
+username = ""
+password = ""
 
 # Set to true to use HTTPS/WSS.  The ISY typically uses a self-signed
 # certificate; certificate verification is skipped automatically.
