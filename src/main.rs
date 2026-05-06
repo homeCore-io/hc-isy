@@ -97,7 +97,7 @@ fn init_logging(
     config_path: &str,
 ) -> (
     tracing_appender::non_blocking::WorkerGuard,
-    hc_logging::LogLevelHandle,
+    plugin_sdk_rs::logging::LogLevelHandle,
     plugin_sdk_rs::mqtt_log_layer::MqttLogHandle,
 ) {
     #[derive(serde::Deserialize, Default)]
@@ -119,7 +119,7 @@ fn init_logging(
 async fn try_start(
     cfg: &Config,
     config_path: &str,
-    log_level_handle: hc_logging::LogLevelHandle,
+    log_level_handle: plugin_sdk_rs::logging::LogLevelHandle,
     mqtt_log_handle: plugin_sdk_rs::mqtt_log_layer::MqttLogHandle,
 ) -> Result<()> {
     // --- HomeCore MQTT (via SDK) ----------------------------------------------
