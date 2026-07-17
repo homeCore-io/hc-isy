@@ -3,13 +3,27 @@
 use anyhow::Result;
 use serde::Deserialize;
 
+/// Operator-config JSON Schema, published on the capability manifest so the
+/// hc-web editor renders a typed form. `None` without the `schema` feature.
+#[cfg(feature = "schema")]
+pub fn config_schema() -> Option<serde_json::Value> {
+    serde_json::to_value(schemars::schema_for!(Config)).ok()
+}
+
+#[cfg(not(feature = "schema"))]
+pub fn config_schema() -> Option<serde_json::Value> {
+    None
+}
+
 // ---------------------------------------------------------------------------
 // Top-level config
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Deserialize, Clone)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct Config {
     pub homecore: HomecoreConfig,
+    #[serde(default)]
     pub isy: IsyConfig,
     #[serde(default)]
     pub logging: crate::logging::LoggingConfig,
@@ -28,6 +42,7 @@ impl Config {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Deserialize, Clone)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct HomecoreConfig {
     #[serde(default = "default_broker_host")]
     pub broker_host: String,
@@ -54,8 +69,10 @@ fn default_plugin_id() -> String {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Deserialize, Clone)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct IsyConfig {
     /// ISY/IoX controller hostname or IP address.
+    #[serde(default)]
     pub host: String,
 
     /// HTTP port.  Default 80 (HTTP) or 443 (TLS).
@@ -63,9 +80,11 @@ pub struct IsyConfig {
     pub port: u16,
 
     /// ISY administrator username (usually "admin").
+    #[serde(default)]
     pub username: String,
 
     /// ISY administrator password.
+    #[serde(default)]
     pub password: String,
 
     /// Use HTTPS/WSS instead of HTTP/WS.
@@ -73,6 +92,18 @@ pub struct IsyConfig {
     /// verification is skipped when tls = true.
     #[serde(default)]
     pub tls: bool,
+}
+
+impl Default for IsyConfig {
+    fn default() -> Self {
+        Self {
+            host: String::new(),
+            port: default_isy_port(),
+            username: String::new(),
+            password: String::new(),
+            tls: false,
+        }
+    }
 }
 
 fn default_isy_port() -> u16 {
