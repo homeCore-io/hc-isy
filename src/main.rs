@@ -32,6 +32,7 @@ mod config;
 mod device;
 mod isy;
 mod logging;
+mod schema;
 
 use anyhow::Result;
 use bridge::Bridge;

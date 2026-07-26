@@ -139,6 +139,9 @@ async fn run_once(
         publisher
             .register_device_full(&device_id, &node.name, Some(kind.as_str()), None, None)
             .await?;
+        // Retained, so a client connecting later still knows what this
+        // device's attributes mean rather than inferring them.
+        crate::schema::publish(publisher, &device_id, &kind).await?;
         let state = node_to_state(node, &kind);
         publisher.publish_state(&device_id, &state).await?;
         publisher.publish_availability(&device_id, true).await?;
