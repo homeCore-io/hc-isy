@@ -278,26 +278,26 @@ pub fn node_to_state(node: &IsyNode, kind: &DeviceKind) -> Value {
 
         DeviceKind::ContactSensor => {
             let open = st_value > 0;
-            json!({
-                "open": open,
-                "contact": open,
-            })
+            // One name per reading. `contact` carried the same value under a
+            // name that conventionally means the OPPOSITE — a closed contact
+            // circuit is a shut door — so a client keying on the name read the
+            // sensor backwards, and every attribute list showed the door twice.
+            json!({ "open": open })
         }
 
         DeviceKind::MotionSensor => {
             let motion = st_value > 0;
-            json!({
-                "motion": motion,
-                "occupancy": motion,
-            })
+            // `occupancy` was the same reading again. A PIR reports motion;
+            // occupancy is an inference from it that this plugin does not make.
+            json!({ "motion": motion })
         }
 
         DeviceKind::WaterSensor => {
             let leak = st_value <= 0;
-            json!({
-                "leak": leak,
-                "water_detected": leak,
-            })
+            // `water_detected` rather than `leak`: it is the name a live rule
+            // already triggers on, and hc-yolink now reports the same one, so a
+            // rule reads the same across both plugins.
+            json!({ "water_detected": leak })
         }
 
         DeviceKind::BinarySensor => {
@@ -415,10 +415,7 @@ pub fn event_to_patch(event: &IsyEvent, kind: &DeviceKind) -> Option<Value> {
         | (DeviceKind::ContactSensor, "DON")
         | (DeviceKind::ContactSensor, "DOF") => {
             let open = v > 0;
-            Some(json!({
-                "open": open,
-                "contact": open,
-            }))
+            Some(json!({ "open": open }))
         }
 
         // ── Motion Sensor ─────────────────────────────────────────────────
@@ -426,10 +423,7 @@ pub fn event_to_patch(event: &IsyEvent, kind: &DeviceKind) -> Option<Value> {
         | (DeviceKind::MotionSensor, "DON")
         | (DeviceKind::MotionSensor, "DOF") => {
             let motion = v > 0;
-            Some(json!({
-                "motion": motion,
-                "occupancy": motion,
-            }))
+            Some(json!({ "motion": motion }))
         }
 
         // ── Water Sensor ──────────────────────────────────────────────────
@@ -437,10 +431,7 @@ pub fn event_to_patch(event: &IsyEvent, kind: &DeviceKind) -> Option<Value> {
         | (DeviceKind::WaterSensor, "DON")
         | (DeviceKind::WaterSensor, "DOF") => {
             let leak = v <= 0;
-            Some(json!({
-                "leak": leak,
-                "water_detected": leak,
-            }))
+            Some(json!({ "water_detected": leak }))
         }
 
         // ── Binary Sensor ──────────────────────────────────────────────────
@@ -741,8 +732,8 @@ mod tests {
     fn water_sensor_state_inverts_dry_signal() {
         let node = binary_node("16.8.1.0", 255);
         let state = node_to_state(&node, &DeviceKind::WaterSensor);
-        assert_eq!(state["leak"], json!(false));
         assert_eq!(state["water_detected"], json!(false));
+        assert!(state.get("leak").is_none(), "the alias is gone");
     }
 
     #[test]
@@ -756,7 +747,7 @@ mod tests {
         };
 
         let patch = event_to_patch(&event, &DeviceKind::WaterSensor).expect("patch");
-        assert_eq!(patch["leak"], json!(true));
         assert_eq!(patch["water_detected"], json!(true));
+        assert!(patch.get("leak").is_none(), "the alias is gone");
     }
 }

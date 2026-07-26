@@ -94,13 +94,6 @@ pub fn schema_for(kind: &DeviceKind) -> DeviceSchema {
 
         DeviceKind::ContactSensor => {
             a.insert("open".into(), open_closed(ro(AttributeKind::Bool, "Door")));
-            // THE INVERSION: `contact` carries the same reading as `open`, so
-            // `contact: true` means OPEN here — the opposite of the convention
-            // a name-keyed client lexicon assumes.
-            a.insert(
-                "contact".into(),
-                open_closed(ro(AttributeKind::Bool, "Contact")),
-            );
         }
 
         DeviceKind::MotionSensor => {
@@ -112,7 +105,6 @@ pub fn schema_for(kind: &DeviceKind) -> DeviceSchema {
                 )
             };
             a.insert("motion".into(), motion("Motion"));
-            a.insert("occupancy".into(), motion("Occupancy"));
         }
 
         DeviceKind::WaterSensor => {
@@ -125,8 +117,7 @@ pub fn schema_for(kind: &DeviceKind) -> DeviceSchema {
                     ("dry", "dries out"),
                 )
             };
-            a.insert("leak".into(), wet("Water"));
-            a.insert("water_detected".into(), wet("Water detected"));
+            a.insert("water_detected".into(), wet("Water"));
         }
 
         DeviceKind::BinarySensor => {
@@ -274,16 +265,28 @@ mod tests {
         }
     }
 
-    /// The inversions this plugin actually has, pinned so a refactor of
-    /// `node_to_state` cannot quietly flip them.
+    /// One name per reading, and the inversion still declared correctly.
+    ///
+    /// This plugin used to publish `contact` beside `open`, `occupancy` beside
+    /// `motion`, and `leak` beside `water_detected` — the same value under two
+    /// names each time, which showed every sensor twice and offered a rule
+    /// author two identical choices. The aliases are gone.
+    ///
+    /// The remaining inversion is real and stays declared: a water sensor is
+    /// wet when `ST <= 0`, because Insteon leak sensors report ON when dry.
     #[test]
-    fn the_inverted_attributes_are_declared_the_way_they_are_published() {
+    fn one_name_per_reading_with_the_inversion_declared() {
         let contact = schema_for(&DeviceKind::ContactSensor).attributes;
-        let c = contact["contact"].states.as_ref().unwrap();
-        assert_eq!(c.get(true).label, "open", "contact: true means OPEN here");
+        assert!(contact.contains_key("open"));
+        assert!(!contact.contains_key("contact"));
+
+        let motion = schema_for(&DeviceKind::MotionSensor).attributes;
+        assert!(motion.contains_key("motion"));
+        assert!(!motion.contains_key("occupancy"));
 
         let water = schema_for(&DeviceKind::WaterSensor).attributes;
-        let w = water["leak"].states.as_ref().unwrap();
+        assert!(!water.contains_key("leak"));
+        let w = water["water_detected"].states.as_ref().unwrap();
         assert_eq!(w.get(true).label, "wet");
     }
 
