@@ -17,7 +17,8 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use futures_util::StreamExt;
-use plugin_sdk_rs::DevicePublisher;
+use plugin_sdk_rs::types::PluginNotice;
+use plugin_sdk_rs::{DevicePublisher, PluginNotices};
 use serde_json::Value;
 use tokio::sync::mpsc;
 use tokio_tungstenite::{
@@ -60,19 +61,45 @@ pub struct Bridge {
     pub config: Config,
     pub publisher: DevicePublisher,
     pub cmd_rx: mpsc::Receiver<(String, Value)>,
+    /// What the operator sees on the plugin page when the controller is not
+    /// answering. The loop below retries forever and says so only in the log,
+    /// while the plugin itself keeps reading "active".
+    pub notices: PluginNotices,
 }
 
 impl Bridge {
     pub async fn run(mut self) -> Result<()> {
         let mut backoff = 2u64;
         loop {
-            match run_once(&self.config, &self.publisher, &mut self.cmd_rx).await {
+            match run_once(
+                &self.config,
+                &self.publisher,
+                &mut self.cmd_rx,
+                &self.notices,
+            )
+            .await
+            {
                 Ok(()) => {
                     info!("Bridge exited cleanly");
                     break;
                 }
                 Err(e) => {
                     error!(error = %e, backoff_secs = backoff, "Bridge error; reconnecting");
+                    self.notices.raise(
+                        PluginNotice::error(
+                            "controller_unreachable",
+                            format!(
+                                "Cannot reach the ISY/IoX controller at {} — {e}. Every \
+                                 Insteon and Z-Wave device it serves is unavailable.",
+                                self.config.isy.host
+                            ),
+                        )
+                        .with_remedy(
+                            "Check the controller is powered and on the network, that \
+                             [isy].host and port are right, and that the username and \
+                             password belong to an account with REST access.",
+                        ),
+                    );
                     tokio::time::sleep(Duration::from_secs(backoff)).await;
                     backoff = (backoff * 2).min(60);
                 }
@@ -86,6 +113,7 @@ async fn run_once(
     cfg: &Config,
     publisher: &DevicePublisher,
     cmd_rx: &mut mpsc::Receiver<(String, Value)>,
+    notices: &PluginNotices,
 ) -> Result<()> {
     // ── ISY REST: load nodes + full status ───────────────────────────
     let isy = Arc::new(
@@ -111,6 +139,8 @@ async fn run_once(
         }
     }
     info!(total = nodes.len(), "Loaded ISY nodes");
+    // Nodes came back, so the controller is answering — clear any prior fault.
+    notices.clear("controller_unreachable");
 
     // ── Register devices and build registry ───────────────────────────
     let current_ids: std::collections::HashSet<String> = nodes
