@@ -32,10 +32,12 @@ mod config;
 mod device;
 mod isy;
 mod logging;
+mod schema;
 
 use anyhow::Result;
 use bridge::Bridge;
 use config::Config;
+use plugin_sdk_rs::types::PluginNotice;
 use plugin_sdk_rs::{PluginClient, PluginConfig};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -142,6 +144,8 @@ async fn try_start(
         &cfg.logging.log_forward_level,
     );
     let publisher = client.device_publisher();
+    // Conditions for the plugin page, not only the log.
+    let notices = client.notices();
     let (cmd_tx, cmd_rx) = mpsc::channel::<(String, serde_json::Value)>(256);
 
     // Enable management protocol (heartbeat + remote config/log commands).
@@ -153,6 +157,17 @@ async fn try_start(
             Some(log_level_handle),
         )
         .await?;
+
+    // Publish the operator-config JSON Schema so the hc-web editor renders a
+    // typed form (rides on the capability manifest).
+    let mgmt = match config::config_schema() {
+        Some(schema) => mgmt.with_config_schema(schema),
+        None => mgmt,
+    };
+
+    // …and the plugin-authored descriptor the editor renders instead of
+    // guessing a form from the schema. Rides the same manifest.
+    let mgmt = mgmt.with_config_descriptor(config::config_descriptor());
 
     // Start the SDK event loop FIRST so the MQTT eventloop is pumping while
     // we register devices.  Without this, queued publishes block forever once
@@ -187,10 +202,25 @@ async fn try_start(
     );
 
     // --- Bridge event loop (runs until error / shutdown) ----------------------
+    if cfg.isy.host.trim().is_empty() {
+        notices.raise(
+            PluginNotice::error(
+                "not_configured",
+                "No ISY/IoX controller address is set, so this plugin cannot connect to \
+                 anything.",
+            )
+            .with_remedy(
+                "Set [isy].host to the controller's address, with a username and password \
+                 for an account that can use its REST interface.",
+            ),
+        );
+    }
+
     let bridge = Bridge {
         config: cfg.clone(),
         publisher,
         cmd_rx,
+        notices,
     };
 
     bridge.run().await
