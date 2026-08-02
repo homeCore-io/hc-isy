@@ -22,8 +22,22 @@ Bridges Universal Devices ISY/IoX controllers (ISY994i, eISY, Polisy) into HomeC
 
 ## Setup
 
-1. Copy `config/config.toml.example` to `config/config.toml`
-2. Set the ISY host, port, and admin credentials
-3. Add a `[[plugins]]` entry in `homecore.toml`
+Install it from the web UI — **Plugins → Add** — then open its
+**Configuration** tab and set the ISY host, port, and admin credentials.
+Devices are read from the controller; you do not list them by hand.
 
 Requires ISY firmware 4.2.3+ for WebSocket event streaming.
+
+homeCore records the install itself, so there is no `[[plugins]]` block to
+write. It owns the config file too — `config/plugins/plugin.isy.toml` under
+homeCore's home directory — and restarts the plugin when that file changes.
+
+## Notices
+
+Problems are reported as **notices**, shown on the plugin's card in the web
+UI. They are state rather than log lines.
+
+| Code | Means |
+|---|---|
+| `not_configured` | No controller address or credentials yet. |
+| `controller_unreachable` | The ISY is not answering REST or the event WebSocket. Clears on reconnect. |
