@@ -31,7 +31,6 @@ mod bridge;
 mod config;
 mod device;
 mod isy;
-mod logging;
 mod schema;
 
 use anyhow::Result;
@@ -105,13 +104,13 @@ fn init_logging(
     #[derive(serde::Deserialize, Default)]
     struct Bootstrap {
         #[serde(default)]
-        logging: logging::LoggingConfig,
+        logging: plugin_sdk_rs::logging::LoggingConfig,
     }
     let bootstrap: Bootstrap = std::fs::read_to_string(config_path)
         .ok()
         .and_then(|s| toml::from_str(&s).ok())
         .unwrap_or_default();
-    logging::init_logging(config_path, "hc-isy", "hc_isy=info", &bootstrap.logging)
+    plugin_sdk_rs::logging::init_logging(config_path, "hc-isy", "hc_isy=info", &bootstrap.logging)
 }
 
 // ---------------------------------------------------------------------------

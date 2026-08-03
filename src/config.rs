@@ -174,7 +174,7 @@ pub struct Config {
     #[serde(default)]
     pub isy: IsyConfig,
     #[serde(default)]
-    pub logging: crate::logging::LoggingConfig,
+    pub logging: plugin_sdk_rs::logging::LoggingConfig,
 }
 
 impl Config {
